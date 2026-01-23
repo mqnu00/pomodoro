@@ -3,6 +3,10 @@ from __future__ import annotations
 import time
 import tkinter as tk
 from tkinter import messagebox, ttk
+from PIL import Image, ImageDraw
+import threading
+import os
+from infi.systray import SysTrayIcon
 
 from .platform_windows import detect_windows_dark_mode, play_done_sound, show_windows_toast
 from .settings import Settings, load_settings, save_settings
@@ -31,6 +35,7 @@ class PomodoroApp:
         self.completed_work_sessions = 0
         self.last_tick_monotonic: float | None = None
         self._elapsed_carry = 0.0  # 累积不足 1 秒的时间
+        self.is_window_visible = True  # 窗口可见状态
 
         # 跟随系统主题
         self._is_dark = detect_windows_dark_mode()
@@ -41,7 +46,18 @@ class PomodoroApp:
         self._build_ui()
         self._refresh_ui()
 
-        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        # 系统托盘相关
+        self.tray_icon = None
+        self.tray_thread = None
+        
+        # 设置窗口最小化事件处理
+        self.root.bind("<Unmap>", self._on_window_minimize)
+        
+        # 延迟设置窗口关闭协议，避免在初始化时被触发
+        self.root.after(200, self._setup_window_protocol)
+        
+        # 延迟创建托盘图标，确保窗口完全显示后再创建
+        self.root.after(500, self._create_tray_icon)
 
     def _init_style(self) -> None:
         style = ttk.Style(self.root)
@@ -227,6 +243,13 @@ class PomodoroApp:
         self.pause()
         self._finish_session(user_skipped=True)
 
+    # 双击触发的函数 
+    def _toggle_window_by_double_click(self, systray): 
+        if self.is_window_visible: 
+            self._hide_to_tray() 
+        else: 
+            self._show_window()
+
     def _schedule_tick(self) -> None:
         self.after_id = self.root.after(200, self._tick)
 
@@ -340,6 +363,122 @@ class PomodoroApp:
             self.total_seconds = self.remaining_seconds
         self._refresh_ui()
 
-    def on_close(self) -> None:
+    def _create_tray_icon(self) -> None:
+        """创建系统托盘图标（使用infi.systray）"""
+        try:
+
+            # 直接引用已有的图标文件
+            def resource_path(relative_path):
+                import sys, os
+                if hasattr(sys, "_MEIPASS"):
+                    return os.path.join(sys._MEIPASS, relative_path)
+                return os.path.join(os.path.dirname(__file__), relative_path)
+
+            icon_path = resource_path("tray_icon.ico")
+            print("调试：托盘图标路径：", icon_path)
+
+            
+            # 创建托盘菜单选项
+            menu_options = (
+                ("显示窗口", None, lambda systray: self._show_window()),
+                ("隐藏窗口", None, lambda systray: self._hide_to_tray()),
+                ("开始/暂停", None, lambda systray: self.toggle_start_pause()),
+                ("重置当前", None, lambda systray: self.reset_current()),
+                ("跳过当前", None, lambda systray: self.skip_session()),
+                (None, None, self._toggle_window_by_double_click),
+            )
+            
+            # 创建系统托盘图标
+            self.tray_icon = SysTrayIcon(
+                icon_path,           # 图标文件路径
+                APP_TITLE,           # 悬停文本
+                menu_options,        # 菜单选项
+                on_quit=lambda systray: self._quit_app(),  # 退出回调
+                default_menu_index=5  # 默认菜单项索引
+            )
+            
+            print("✓ 系统托盘图标对象已创建")
+            
+            # 延迟启动托盘图标，确保窗口完全显示
+            self.root.after(1000, self._start_tray_icon)
+            
+        except Exception as e:
+            print(f"✗ 创建系统托盘图标失败: {e}")
+            import traceback
+            traceback.print_exc()
+            self.tray_icon = None
+    
+    def _start_tray_icon(self) -> None:
+        """启动系统托盘图标"""
+        if self.tray_icon is not None:
+            print("调试：启动托盘图标...")
+            # infi.systray在单独的线程中运行
+            self.tray_thread = threading.Thread(target=self.tray_icon.start, daemon=True)
+            self.tray_thread.start()
+            print("✓ 系统托盘图标已启动")
+    
+    def _show_window(self, icon=None, item=None) -> None:
+        """显示主窗口"""
+        self.root.after(0, self._show_window_main)
+        self.is_window_visible = True
+    
+    def _show_window_main(self) -> None:
+        """在主线程中显示窗口"""
+        self.root.deiconify()  # 显示窗口
+        self.root.lift()       # 置顶
+        self.root.focus_force() # 获取焦点
+        
+        # 如果窗口被最小化了，恢复它
+        if self.root.state() == 'iconic':
+            self.root.state('normal')
+    
+    def _hide_to_tray(self) -> None:
+        """隐藏窗口到系统托盘"""
+        self.root.withdraw()  # 隐藏窗口
+        self.is_window_visible = False
+        print("✓ 窗口已隐藏到系统托盘")
+    
+    def _setup_window_protocol(self) -> None:
+        """设置窗口关闭协议 - 隐藏到系统托盘而不是退出"""
+        print("设置窗口关闭协议")
+        # 使用lambda包装，避免直接调用
+        self.root.protocol("WM_DELETE_WINDOW", lambda: self._on_window_close())
+    
+    def _on_window_minimize(self, event=None) -> None:
+        """窗口最小化事件处理 - 隐藏到系统托盘"""
+        # 检查是否真的是最小化事件，而不是其他Unmap事件
+        if event and hasattr(event, 'type') and event.type == 'Unmap':
+            print("窗口最小化，隐藏到系统托盘")
+            self._hide_to_tray()
+    
+    def _on_window_close(self) -> None:
+        """窗口关闭事件处理 - 隐藏到系统托盘"""
+        # 只有在窗口可见时才隐藏到托盘
+        if self.root.state() != 'withdrawn':
+            print("窗口关闭按钮被点击，隐藏到系统托盘")
+            self._hide_to_tray()
+        else:
+            print("窗口已经隐藏，忽略关闭事件")
+    
+    def _quit_app(self, systray=None) -> None:
+        """退出应用程序"""
+        print("正在退出应用程序...")
+        
+        # 保存设置
         self.apply_settings()
+        
+        # 在主线程中销毁窗口
+        self.root.after(0, self._destroy_app)
+    
+    def _destroy_app(self) -> None:
+        """销毁应用程序"""
+        # 停止托盘图标（在主线程中调用）
+        if self.tray_icon is not None:
+            try:
+                # 使用after延迟调用shutdown，确保不在托盘图标线程中
+                self.root.after(100, self.tray_icon.shutdown)
+            except Exception as e:
+                print(f"停止托盘图标时出错: {e}")
+        
+        # 销毁主窗口
         self.root.destroy()
