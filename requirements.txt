@@ -1,0 +1,20 @@
+# 番茄钟 (Pomodoro) 项目依赖
+
+# 核心依赖
+windows-toasts>=1.3.1  # Windows Toast通知功能
+
+# 开发/打包依赖（可选）
+pyinstaller>=6.0.0     # 用于打包为EXE文件
+
+# 注意：以下为标准库依赖，无需安装：
+# - tkinter (Python标准库)
+# - time (Python标准库)
+# - json (Python标准库)
+# - os (Python标准库)
+# - shutil (Python标准库)
+# - sys (Python标准库)
+# - traceback (Python标准库)
+# - dataclasses (Python 3.7+ 标准库)
+# - winsound (Windows标准库)
+# - ctypes (Python标准库)
+# - winreg (Windows标准库)
