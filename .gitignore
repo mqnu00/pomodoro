@@ -32,7 +32,7 @@ venv.bak/
 Thumbs.db
 
 # Project specific
-Pomodoro.spec
+Pomodoro*.spec
 build_exe.bat
 build_exe.ps1
 dist/
