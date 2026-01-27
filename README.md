@@ -101,7 +101,7 @@ powershell -ExecutionPolicy Bypass -File .\build_exe.ps1
 
 ```bash
 pip install pyinstaller
-pyinstaller -F -w main.py --name Pomodoro
+python -m PyInstaller -F  main.py --add-data ".\pomodoro\tray_icon.ico;." --name Pomodoro --windowed  
 ```
 
 生成的可执行文件在 `dist/` 目录。
