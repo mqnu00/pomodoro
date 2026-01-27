@@ -3,7 +3,6 @@ from __future__ import annotations
 import time
 import tkinter as tk
 from tkinter import messagebox, ttk
-from PIL import Image, ImageDraw
 import threading
 import os
 from infi.systray import SysTrayIcon

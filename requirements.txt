@@ -1,22 +1,23 @@
 # 番茄钟 (Pomodoro) 项目依赖
 
-# 核心依赖
-windows-toasts>=1.3.1  # Windows Toast通知功能
-infi.systray>=0.1.12   # 系统托盘图标支持（Windows兼容性更好）
+# 核心依赖（运行应用必需）
+windows-toasts>=1.3.1      # Windows Toast通知功能
+infi.systray>=0.1.12       # 系统托盘图标支持（Windows兼容性更好）
 
 # 开发/打包依赖（可选）
-pyinstaller>=6.0.0     # 用于打包为EXE文件
+pyinstaller>=6.0.0         # 用于打包为EXE文件
+
+# Python版本要求
+# 需要Python 3.10+（建议使用最新稳定版）
 
 # 注意：以下为标准库依赖，无需安装：
-# - tkinter (Python标准库)
-# - time (Python标准库)
-# - json (Python标准库)
-# - os (Python标准库)
-# - shutil (Python标准库)
-# - sys (Python标准库)
-# - traceback (Python标准库)
-# - dataclasses (Python 3.7+ 标准库)
-# - winsound (Windows标准库)
-# - ctypes (Python标准库)
-# - winreg (Windows标准库)
-# - PIL (Python Imaging Library) - pystray依赖
+# - tkinter (Python标准库) - GUI框架
+# - time (Python标准库) - 时间处理
+# - json (Python标准库) - 配置文件读写
+# - os, shutil, sys (Python标准库) - 系统操作
+# - traceback (Python标准库) - 错误追踪
+# - dataclasses (Python 3.7+ 标准库) - 数据类
+# - winsound (Windows标准库) - 声音播放
+# - ctypes (Python标准库) - Windows API调用
+# - winreg (Windows标准库) - 注册表访问
+# - threading (Python标准库) - 多线程支持
