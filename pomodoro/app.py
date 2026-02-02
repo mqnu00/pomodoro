@@ -32,6 +32,7 @@ class PomodoroApp:
         self.remaining_seconds = self.settings.work_minutes * 60
         self.total_seconds = self.remaining_seconds
         self.completed_work_sessions = 0
+        self.skipped_work_sessions = 0  # 跳过的番茄钟计数
         self.last_tick_monotonic: float | None = None
         self._elapsed_carry = 0.0  # 累积不足 1 秒的时间
         self.is_window_visible = True  # 窗口可见状态
@@ -180,6 +181,43 @@ class PomodoroApp:
             return self.settings.short_break_minutes * 60
         return self.settings.long_break_minutes * 60
 
+    def _create_tooltip(self, widget, text):
+        """为widget创建鼠标悬浮提示"""
+        # 检查是否已经绑定了tooltip事件
+        if hasattr(widget, '_tooltip_bound') and widget._tooltip_bound:
+            return
+            
+        def show_tooltip(event):
+            # 如果已经有tooltip，先销毁
+            if hasattr(widget, 'tooltip') and widget.tooltip:
+                widget.tooltip.destroy()
+            
+            # 创建tooltip窗口
+            tooltip = tk.Toplevel(self.root)
+            tooltip.wm_overrideredirect(True)  # 移除窗口装饰
+            tooltip.wm_geometry(f"+{event.x_root+10}+{event.y_root+10}")
+            
+            # 设置tooltip样式
+            label = tk.Label(tooltip, text=text, justify="left",
+                           background="#ffffe0", relief="solid", borderwidth=1,
+                           font=("Segoe UI", 9))
+            label.pack()
+            
+            # 保存tooltip引用以便稍后销毁
+            widget.tooltip = tooltip
+            
+        def hide_tooltip(event):
+            if hasattr(widget, 'tooltip') and widget.tooltip:
+                widget.tooltip.destroy()
+                widget.tooltip = None
+        
+        # 绑定事件
+        widget.bind("<Enter>", show_tooltip)
+        widget.bind("<Leave>", hide_tooltip)
+        
+        # 标记为已绑定
+        widget._tooltip_bound = True
+
     def _refresh_ui(self) -> None:
         # 模式颜色 + 进度条配色
         self._accent = accent_for_mode(self.mode)
@@ -190,7 +228,22 @@ class PomodoroApp:
 
         self.mode_label.config(text=f"当前：{self._mode_name()}")
         self.time_label.config(text=format_mmss(self.remaining_seconds))
-        self.stats_label.config(text=f"已完成工作番茄：{self.completed_work_sessions}")
+        
+        # 更新统计标签文本
+        total_work_sessions = self.completed_work_sessions + self.skipped_work_sessions
+        stats_text = f"工作番茄：{self.completed_work_sessions}完成，{self.skipped_work_sessions}跳过"
+        self.stats_label.config(text=stats_text)
+        
+        # 设置Tooltip（鼠标悬浮提示）
+        tooltip_text = (
+            f"番茄钟统计详情：\n"
+            f"• 完成的工作番茄：{self.completed_work_sessions}\n"
+            f"• 跳过的工作番茄：{self.skipped_work_sessions}\n"
+            f"• 总工作番茄数：{total_work_sessions}\n"
+            f"• 长休间隔：每{self.settings.long_break_every}个工作番茄\n"
+            f"• 下次长休在：第{(total_work_sessions // self.settings.long_break_every + 1) * self.settings.long_break_every}个番茄钟"
+        )
+        self._create_tooltip(self.stats_label, tooltip_text)
 
         self.start_pause_btn.config(text="暂停" if self.is_running else "开始")
         state = "disabled" if self.is_running else "normal"
@@ -278,17 +331,21 @@ class PomodoroApp:
 
     def _next_mode(self) -> str:
         if self.mode == "work":
-            # completed_work_sessions 已经在 _finish_session 中增加了
-            # 所以直接检查是否达到长休条件
-            if self.completed_work_sessions % self.settings.long_break_every == 0:
+            # 计算总的工作番茄钟（完成 + 跳过）
+            total_work_sessions = self.completed_work_sessions + self.skipped_work_sessions
+            # 检查是否达到长休条件
+            if total_work_sessions % self.settings.long_break_every == 0:
                 return "long_break"
             return "short_break"
         return "work"
 
     def _finish_session(self, user_skipped: bool) -> None:
         prev_mode = self.mode
-        if prev_mode == "work" and not user_skipped:
-            self.completed_work_sessions += 1
+        if prev_mode == "work":
+            if user_skipped:
+                self.skipped_work_sessions += 1
+            else:
+                self.completed_work_sessions += 1
 
         next_mode = self._next_mode()
         self.mode = next_mode
