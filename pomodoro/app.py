@@ -255,6 +255,9 @@ class PomodoroApp:
         self.progress.config(value=int(done * 1000 / total))
 
         self.root.title(f"{format_mmss(self.remaining_seconds)} - {APP_TITLE}")
+        
+        # 更新托盘图标悬停文本
+        self._update_tray_hover_text()
 
     def toggle_start_pause(self) -> None:
         if self.is_running:
@@ -472,6 +475,24 @@ class PomodoroApp:
             self.tray_thread = threading.Thread(target=self.tray_icon.start, daemon=True)
             self.tray_thread.start()
             print("✓ 系统托盘图标已启动")
+    
+    def _update_tray_hover_text(self) -> None:
+        """更新托盘图标悬停文本"""
+        # 检查tray_icon是否已经初始化
+        if hasattr(self, 'tray_icon') and self.tray_icon is not None:
+            try:
+                # 构建悬停文本：显示剩余时间和状态
+                mode_name = self._mode_name()
+                time_text = format_mmss(self.remaining_seconds)
+                status_text = "运行中" if self.is_running else "已暂停"
+                
+                hover_text = f"{APP_TITLE}\n{time_text} - {mode_name} ({status_text})"
+                
+                # 更新托盘图标悬停文本
+                self.tray_icon.update(hover_text=hover_text)
+            except Exception as e:
+                # 忽略更新失败的错误，避免影响主程序运行
+                pass
     
     def _show_window(self, icon=None, item=None) -> None:
         """显示主窗口"""
